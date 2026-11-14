@@ -35,6 +35,7 @@ let
   };
 in
 {
+  key = "${toString __curPos.file}#modules.nixos.nfs-provisioner";
   options.homelab.nfs-provisioner = {
     enable = lib.mkEnableOption "the NFS volume provisioner";
     server = lib.mkOption {
