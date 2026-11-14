@@ -177,6 +177,37 @@ in
       _serviceName: spec: "/${spec.dbName}.pgdump"
     ) dbBackups;
 
+    # A workload named after a database waits until it can log in to it. Started before postgresql is up or before the
+    # job made the database, it crash-loops into a back-off that outlasts both
+    homelab.kubernetes.submodules.defaults = [
+      {
+        name = "workload";
+        default =
+          { name, ... }:
+          lib.mkIf (cfg.databases ? ${name}) {
+            kubernetes.resources.deployments.${name}.spec.template.spec.initContainers.wait-for-postgresql = {
+              image = "${image.buildArgs.name}:${image.imageTag}";
+              imagePullPolicy = "Never";
+              command = [
+                "bash"
+                "-c"
+                "until psql --no-psqlrc -c '' 2>/dev/null; do sleep 2; done"
+              ];
+              env = {
+                PGHOST.value = "postgresql.postgresql";
+                PGCONNECT_TIMEOUT.value = "5";
+                PGUSER.value = cfg.databases.${name}.username;
+                PGDATABASE.value = cfg.databases.${name}.dbName;
+                PGPASSWORD.valueFrom.secretKeyRef = {
+                  name = "postgresql-password";
+                  key = "password";
+                };
+              };
+              securityContext.readOnlyRootFilesystem = true;
+            };
+          };
+      }
+    ];
     # One manifest with the namespace: k3s applies manifests in the order of their names, and the jobs of a
     # `postgresql-databases` waited for the pass after the one that made the namespace
     homelab.kubernetes.submodules.instances.postgresql = {
@@ -255,12 +286,16 @@ in
                 ];
                 args = [
                   (lib.join "\n" (
-                    map (cmd: ''psql --no-psqlrc --set ON_ERROR_STOP=1 --pset pager=off -f <(printf "%s" "${cmd}")'') ([
-                      "SELECT 'CREATE USER ${spec.username}' WHERE NOT EXISTS (SELECT FROM pg_user WHERE usename = '${spec.username}')\\gexec"
-                      "\\getenv pw USER_PASSWORD\nALTER USER ${spec.username} PASSWORD :'pw'"
-                      "SELECT 'CREATE DATABASE ${spec.dbName}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${spec.dbName}')\\gexec"
-                      "ALTER DATABASE ${spec.dbName} OWNER TO ${spec.username}"
-                    ])
+                    # Started before postgresql accepts connections, the job would fail into the back-off of its pod
+                    [ "until pg_isready --quiet; do sleep 2; done" ]
+                    ++
+                      map (cmd: ''psql --no-psqlrc --set ON_ERROR_STOP=1 --pset pager=off -f <(printf "%s" "${cmd}")'')
+                        ([
+                          "SELECT 'CREATE USER ${spec.username}' WHERE NOT EXISTS (SELECT FROM pg_user WHERE usename = '${spec.username}')\\gexec"
+                          "\\getenv pw USER_PASSWORD\nALTER USER ${spec.username} PASSWORD :'pw'"
+                          "SELECT 'CREATE DATABASE ${spec.dbName}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${spec.dbName}')\\gexec"
+                          "ALTER DATABASE ${spec.dbName} OWNER TO ${spec.username}"
+                        ])
                     ++ map (
                       cmd:
                       ''psql --no-psqlrc --set ON_ERROR_STOP=1 --pset pager=off -d ${spec.dbName} -f <(printf "%s" "${cmd}")''
