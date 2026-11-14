@@ -7,7 +7,7 @@
 }:
 let
   cfg = config.homelab.smb;
-  users = lib.filterAttrs (user: spec: spec.enable && spec.isNormalUser) config.users.users;
+  users = lib.filterAttrs (_user: spec: spec.enable && spec.isNormalUser) config.users.users;
 in
 {
   key = "${toString __curPos.file}#modules.nixos.smb";
@@ -40,13 +40,13 @@ in
       openFirewall = true;
     };
     setup-secrets = {
-      sources = lib.mapAttrs' (user: spec: {
+      sources = lib.mapAttrs' (user: _spec: {
         name = "SMB_PW_${user}";
         value = {
           description = "SMB Password for ${user}";
         };
       }) users;
-      destinations = lib.mapAttrsToList (user: spec: {
+      destinations = lib.mapAttrsToList (user: _spec: {
         logPrefix = "SMB Password for ${user}";
         requires = [ "SMB_PW_${user}" ];
         cmd = lib.getExe (

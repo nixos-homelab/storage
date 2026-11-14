@@ -9,7 +9,7 @@ let
   ccfg = config.homelab.cluster;
   cfg = config.homelab.postgresql;
   hllib = inputs.homelab-shared.lib;
-  dbBackups = lib.filterAttrs (serviceName: spec: spec.backup.enable) cfg.databases;
+  dbBackups = lib.filterAttrs (_serviceName: spec: spec.backup.enable) cfg.databases;
   passwordSource = username: "POSTGRESQL_PASSWORD_${lib.toUpper username}";
   passwordRef = username: {
     valueFrom.secretKeyRef = {
@@ -149,7 +149,7 @@ in
             fi
           '';
         }
-      ) ([ "postgres" ] ++ lib.mapAttrsToList (serviceName: spec: spec.username) cfg.databases)
+      ) ([ "postgres" ] ++ lib.mapAttrsToList (_serviceName: spec: spec.username) cfg.databases)
     );
     # The consumer reads its password from a Secret in its own namespace, named after the serviceName
     setup-secrets.destinations = [
@@ -170,7 +170,7 @@ in
       '';
     }) cfg.databases;
     homelab.cluster.backup.volumes.postgresql.database-dumps = lib.mapAttrsToList (
-      serviceName: spec: "/${spec.dbName}.pgdump"
+      _serviceName: spec: "/${spec.dbName}.pgdump"
     ) dbBackups;
 
     homelab.kubernetes.submodules.instances = {
@@ -234,7 +234,7 @@ in
           };
           submodules.instances =
             lib.mapAttrs' (
-              serviceName: spec:
+              _serviceName: spec:
               let
                 jobName = "create-${spec.dbName}-db";
               in
@@ -275,7 +275,7 @@ in
               }
             ) cfg.databases
             // lib.mapAttrs' (
-              serviceName: spec:
+              _serviceName: spec:
               let
                 jobName = "backup-${spec.dbName}-db";
               in

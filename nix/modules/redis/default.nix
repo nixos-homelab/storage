@@ -22,7 +22,7 @@ in
     assertions = with builtins; [
       (
         let
-          overlaps = lib.filterAttrs (idx: names: length names > 1) (
+          overlaps = lib.filterAttrs (_idx: names: length names > 1) (
             lib.zipAttrs (lib.mapAttrsToList (name: value: { ${value} = name; }) cfg.databases)
           );
         in
@@ -38,7 +38,7 @@ in
       )
       (
         let
-          nonInts = lib.filterAttrs (name: idx: toString (lib.toIntBase10 idx) != idx) cfg.databases;
+          nonInts = lib.filterAttrs (_name: idx: toString (lib.toIntBase10 idx) != idx) cfg.databases;
         in
         {
           assertion = length (attrNames nonInts) == 0;
