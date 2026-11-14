@@ -61,6 +61,10 @@ let
     ];
     config.Entrypoint = [ (lib.getExe entrypoint) ];
     config.Cmd = [ "postgres" ];
+    # Fast shutdown: postgres takes SIGTERM as smart shutdown, which waits for every client to disconnect and so for
+    # the kill at the end of the grace period. containerd reads the stop signal from the image only; the pod field
+    # `lifecycle.stopSignal` is alpha (ContainerStopSignals) at 1.35 and the API server drops it
+    config.StopSignal = "SIGINT";
   };
 in
 {
@@ -192,7 +196,6 @@ in
               container = {
                 image = "${image.buildArgs.name}:${image.imageTag}";
                 imagePullPolicy = "Never";
-                lifecycle.stopSignal = "SIGINT";
                 # POSTGRES_PASSWORD only applies at initdb, so the Secret's password is set on every start too.
                 # The temporary server initdb starts takes it as well, and the loop outlasts its shutdown.
                 lifecycle.postStart.exec.command = [
