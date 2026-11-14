@@ -1,4 +1,4 @@
-{ inputs, self, ... }:
+{ inputs, ... }:
 {
   config,
   pkgs,
@@ -7,6 +7,7 @@
 }:
 let
   cfg = config.homelab.nfs-provisioner;
+  hllib = inputs.homelab-shared.lib;
   kubelib = inputs.kube-generators.lib { inherit pkgs; };
   # The chart and the provisioner from the same commit of main: 4.0.18 has a broken helm chart, and the only published
   # image, v4.0.2, ignores the chart's NFS_DEFAULT_MODE, _UID and _GID (it creates every volume 0777)
@@ -103,7 +104,7 @@ in
     homelab.cluster.images = [ image ];
     homelab.cluster.manifests = {
       nfs-provisioner-helm.source =
-        self.lib.k8s.patchManifest { inherit pkgs; }
+        hllib.k8s.patchManifest { inherit pkgs; }
           (kubelib.buildHelmChart {
             name = "nfs-subdir-external-provisioner";
             namespace = "nfs-provisioner";

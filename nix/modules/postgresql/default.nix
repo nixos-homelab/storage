@@ -1,4 +1,4 @@
-{ inputs, self, ... }:
+{ inputs, ... }:
 {
   lib,
   pkgs,
@@ -8,6 +8,7 @@
 let
   ccfg = config.homelab.cluster;
   cfg = config.homelab.postgresql;
+  hllib = inputs.homelab-shared.lib;
   dbBackups = lib.filterAttrs (serviceName: spec: spec.backup.enable) cfg.databases;
   passwordSource = username: "POSTGRESQL_PASSWORD_${lib.toUpper username}";
   passwordRef = username: {
@@ -140,7 +141,7 @@ in
         username:
         lib.nameValuePair (passwordSource username) {
           description = "PostgreSQL password of ${username}";
-          cmd = self.lib.setup-secrets.mkScript pkgs ''
+          cmd = hllib.setup-secrets.mkScript pkgs ''
             if [[ -n $(kubectl -n postgresql get secret ${username}-password --ignore-not-found -oname) ]]; then
               getKubeSecret postgresql ${username}-password password
             else
@@ -155,7 +156,7 @@ in
       {
         logPrefix = "PostgreSQL password of postgres";
         requires = [ (passwordSource "postgres") ];
-        cmd = self.lib.setup-secrets.mkScript pkgs ''
+        cmd = hllib.setup-secrets.mkScript pkgs ''
           setKubeSecret postgresql postgres-password password "''${${passwordSource "postgres"}:?}"
         '';
       }
@@ -163,7 +164,7 @@ in
     ++ lib.mapAttrsToList (serviceName: spec: {
       logPrefix = "PostgreSQL password of ${spec.username}";
       requires = [ (passwordSource spec.username) ];
-      cmd = self.lib.setup-secrets.mkScript pkgs ''
+      cmd = hllib.setup-secrets.mkScript pkgs ''
         setKubeSecret postgresql ${spec.username}-password password "''${${passwordSource spec.username}:?}"
         setKubeSecret ${serviceName} postgresql-password password "''${${passwordSource spec.username}:?}"
       '';

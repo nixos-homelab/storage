@@ -1,4 +1,4 @@
-{ self, ... }:
+{ inputs, ... }:
 {
   lib,
   config,
@@ -7,7 +7,7 @@
 }:
 let
   cfg = config.homelab.redis;
-  image = (self.lib.images.pinned pkgs ./Dockerfile).redis;
+  image = (inputs.homelab-shared.lib.images.pinned pkgs ./Dockerfile).redis;
 in
 {
   key = "${toString __curPos.file}#modules.nixos.redis";
