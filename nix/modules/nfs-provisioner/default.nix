@@ -98,40 +98,48 @@ in
     };
   };
   config = lib.mkIf cfg.enable {
-    homelab.kubernetes.submodules.instances.nfs-provisioner = {
-      submodule = "manifest";
-      config.kubernetes.resources.namespaces.nfs-provisioner.metadata.namespace = null;
-    };
     homelab.cluster.images = [ image ];
     homelab.cluster.manifests = {
-      nfs-provisioner-helm.source =
+      # The namespace in the same manifest as the chart: k3s applies manifests in the order of their names and the next
+      # pass only after 15 s, and `nfs-provisioner-helm` came before the `nfs-provisioner` with the namespace, which kept
+      # every PVC waiting for the second pass
+      nfs-provisioner.source =
         hllib.k8s.patchManifest { inherit pkgs; }
-          (kubelib.buildHelmChart {
-            name = "nfs-subdir-external-provisioner";
-            namespace = "nfs-provisioner";
-            chart = "${src}/charts/nfs-subdir-external-provisioner";
-            values = {
-              image = {
-                repository = image.buildArgs.name;
-                tag = image.imageTag;
-              };
-              # Main's go.mod has a client-go without the endpoints lock its provisioner library elects a leader with
-              # ("endpoints lock is removed, migrate to leases"). One replica, recreated, needs no leader
-              leaderElection.enabled = false;
-              nfs = {
-                server = cfg.server;
-                path = cfg.path;
-                defaultMode = ''"${cfg.mountpointOwnership.mode}"'';
-                defaultUid = ''"${builtins.toString cfg.mountpointOwnership.uid}"'';
-                defaultGid = ''"${builtins.toString cfg.mountpointOwnership.gid}"'';
-              };
-              storageClass = {
-                defaultClass = true;
-                reclaimPolicy = "Retain";
-                pathPattern = cfg.pathPattern;
+          (pkgs.runCommand "nfs-provisioner.yaml" {
+            namespace = kubelib.toYAMLStreamFile [
+              {
+                apiVersion = "v1";
+                kind = "Namespace";
+                metadata.name = "nfs-provisioner";
+              }
+            ];
+            chart = kubelib.buildHelmChart {
+              name = "nfs-subdir-external-provisioner";
+              namespace = "nfs-provisioner";
+              chart = "${src}/charts/nfs-subdir-external-provisioner";
+              values = {
+                image = {
+                  repository = image.buildArgs.name;
+                  tag = image.imageTag;
+                };
+                # Main's go.mod has a client-go without the endpoints lock its provisioner library elects a leader with
+                # ("endpoints lock is removed, migrate to leases"). One replica, recreated, needs no leader
+                leaderElection.enabled = false;
+                nfs = {
+                  server = cfg.server;
+                  path = cfg.path;
+                  defaultMode = ''"${cfg.mountpointOwnership.mode}"'';
+                  defaultUid = ''"${builtins.toString cfg.mountpointOwnership.uid}"'';
+                  defaultGid = ''"${builtins.toString cfg.mountpointOwnership.gid}"'';
+                };
+                storageClass = {
+                  defaultClass = true;
+                  reclaimPolicy = "Retain";
+                  pathPattern = cfg.pathPattern;
+                };
               };
             };
-          })
+          } ''cat "$namespace" - "$chart" <<<--- >"$out"'')
           (
             kubelib.toYAMLStreamFile [
               {
