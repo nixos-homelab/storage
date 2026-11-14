@@ -6,6 +6,7 @@
   ...
 }:
 let
+  cfg = config.homelab.smb;
   users = lib.filterAttrs (user: spec: spec.enable && spec.isNormalUser) config.users.users;
 in
 {
@@ -14,7 +15,7 @@ in
     enable = lib.mkEnableOption "default Samba filesharing configuration";
   };
   imports = [ inputs.setup-secrets.nixosModules.default ];
-  config = {
+  config = lib.mkIf cfg.enable {
     services.samba = {
       openFirewall = true;
       nmbd.enable = false;
