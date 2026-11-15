@@ -5,7 +5,7 @@ the PostgreSQL and Redis instances that apps in the other repos keep
 their data in, PersistentVolumes on an NFS export, and Samba file sharing
 on the host.
 
-For the full list of module options, see [the options reference](https://nixos-homelab.github.io/storage/options/).
+For the full list of module options, see [the documentation](https://nixos-homelab.github.io/storage/), under Options.
 
 ## Setup
 
