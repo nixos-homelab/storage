@@ -76,7 +76,14 @@
                     };
                     postgresql = {
                       enable = true;
-                      databases = { };
+                      # Two databases of one consumer, the second with a hyphen in its name
+                      databases = {
+                        myapp.backup.enable = true;
+                        myapp-log = {
+                          namespace = "myapp";
+                          username = "myapp";
+                        };
+                      };
                     };
                     redis = {
                       enable = true;

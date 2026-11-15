@@ -9,6 +9,13 @@ let
   ccfg = config.homelab.cluster;
   cfg = config.homelab.postgresql;
   hllib = inputs.homelab-shared.lib;
+  # Databases of one consumer share a username
+  usernames = lib.unique (
+    [ "postgres" ] ++ lib.mapAttrsToList (_serviceName: spec: spec.username) cfg.databases
+  );
+  usernamesByNamespace = lib.mapAttrs (
+    _namespace: specs: lib.unique (map (spec: spec.username) specs)
+  ) (lib.groupBy (spec: spec.namespace) (lib.attrValues cfg.databases));
   dbBackups = lib.filterAttrs (_serviceName: spec: spec.backup.enable) cfg.databases;
   passwordSource = username: "POSTGRESQL_PASSWORD_${lib.toUpper username}";
   passwordRef = username: {
@@ -95,6 +102,12 @@ in
                 defaultText = "`<dbName>`";
                 default = module.config.dbName;
               };
+              namespace = lib.mkOption {
+                description = "Namespace of the consumer, which gets the password of `username` as the Secret `postgresql-password`. Databases in one namespace share their username";
+                type = lib.types.str;
+                defaultText = "`<serviceName>`";
+                default = name;
+              };
               backup = {
                 enable = lib.mkEnableOption "backup of the database";
                 schedule = lib.mkOption {
@@ -153,9 +166,9 @@ in
             fi
           '';
         }
-      ) ([ "postgres" ] ++ lib.mapAttrsToList (_serviceName: spec: spec.username) cfg.databases)
+      ) usernames
     );
-    # The consumer reads its password from a Secret in its own namespace, named after the serviceName
+    # The consumer reads its password from a Secret in its own namespace
     setup-secrets.destinations = [
       {
         logPrefix = "PostgreSQL password of postgres";
@@ -165,14 +178,20 @@ in
         '';
       }
     ]
-    ++ lib.mapAttrsToList (serviceName: spec: {
-      logPrefix = "PostgreSQL password of ${spec.username}";
-      requires = [ (passwordSource spec.username) ];
-      cmd = hllib.setup-secrets.mkScript pkgs ''
-        setKubeSecret postgresql ${spec.username}-password password "''${${passwordSource spec.username}:?}"
-        setKubeSecret ${serviceName} postgresql-password password "''${${passwordSource spec.username}:?}"
-      '';
-    }) cfg.databases;
+    ++ lib.unique (
+      lib.mapAttrsToList (_serviceName: spec: {
+        logPrefix = "PostgreSQL password of ${spec.username}";
+        requires = [ (passwordSource spec.username) ];
+        cmd = hllib.setup-secrets.mkScript pkgs ''
+          setKubeSecret postgresql ${spec.username}-password password "''${${passwordSource spec.username}:?}"
+          setKubeSecret ${spec.namespace} postgresql-password password "''${${passwordSource spec.username}:?}"
+        '';
+      }) cfg.databases
+    );
+    assertions = lib.mapAttrsToList (namespace: names: {
+      assertion = lib.length names == 1;
+      message = "homelab.postgresql.databases in the namespace ${namespace} have the usernames ${lib.concatStringsSep ", " names}; they share its Secret postgresql-password, so they need one username";
+    }) usernamesByNamespace;
     homelab.cluster.backup.volumes.postgresql.database-dumps = lib.mapAttrsToList (
       _serviceName: spec: "/${spec.dbName}.pgdump"
     ) dbBackups;
@@ -290,12 +309,16 @@ in
                     [ "until pg_isready --quiet; do sleep 2; done" ]
                     ++
                       map (cmd: ''psql --no-psqlrc --set ON_ERROR_STOP=1 --pset pager=off -f <(printf "%s" "${cmd}")'')
-                        ([
-                          "SELECT 'CREATE USER ${spec.username}' WHERE NOT EXISTS (SELECT FROM pg_user WHERE usename = '${spec.username}')\\gexec"
-                          "\\getenv pw USER_PASSWORD\nALTER USER ${spec.username} PASSWORD :'pw'"
-                          "SELECT 'CREATE DATABASE ${spec.dbName}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${spec.dbName}')\\gexec"
-                          "ALTER DATABASE ${spec.dbName} OWNER TO ${spec.username}"
-                        ])
+                        # format() quotes the names: a hyphen in a database name needs quotes, and a double quote would
+                        # end the shell string around the command
+                        (
+                          [
+                            "SELECT format('CREATE USER %I', '${spec.username}') WHERE NOT EXISTS (SELECT FROM pg_user WHERE usename = '${spec.username}')\\gexec"
+                            "\\getenv pw USER_PASSWORD\nSELECT format('ALTER USER %I PASSWORD %L', '${spec.username}', :'pw')\\gexec"
+                            "SELECT format('CREATE DATABASE %I', '${spec.dbName}') WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${spec.dbName}')\\gexec"
+                            "SELECT format('ALTER DATABASE %I OWNER TO %I', '${spec.dbName}', '${spec.username}')\\gexec"
+                          ]
+                        )
                     ++ map (
                       cmd:
                       ''psql --no-psqlrc --set ON_ERROR_STOP=1 --pset pager=off -d ${spec.dbName} -f <(printf "%s" "${cmd}")''
