@@ -79,7 +79,13 @@
             '';
             checks.manifests = inputs.homelab-shared.lib.checks.manifests {
               inherit pkgs;
-              modules = lib.attrValues self.nixosModules ++ [ ./nix/tests/config.nix ];
+              modules = lib.attrValues self.nixosModules ++ [
+                ./nix/tests/config.nix
+                {
+                  # Evaluates the metrics parts of the modules, off with Alloy
+                  homelab.alloy.enable = true;
+                }
+              ];
             };
             # nfs-provisioner and postgresql on one node on k3s' bundled network, under the NixOS test driver (needs KVM)
             checks.storage = import ./nix/tests/storage.nix { inherit self inputs pkgs; };
