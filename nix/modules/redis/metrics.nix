@@ -7,6 +7,7 @@
   ...
 }:
 let
+  cfg = config.homelab.redis;
   port = 9121;
   image = pkgs.dockerTools.buildImage {
     name = "cluster.local/redis-exporter";
@@ -15,7 +16,13 @@ let
 in
 {
   imports = [ inputs.homelab-monitoring.nixosModules.alloy ];
-  config = lib.mkIf config.homelab.redis.enable (
+  options.homelab.redis.metrics.enable = lib.mkOption {
+    description = "Whether Alloy scrapes Redis's metrics, and runs its exporter sidecar.";
+    type = lib.types.bool;
+    default = config.homelab.alloy.enable;
+    defaultText = lib.literalExpression "config.homelab.alloy.enable";
+  };
+  config = lib.mkIf (cfg.enable && cfg.metrics.enable) (
     lib.mkMerge [
       {
         homelab.alloy.monitors.redis = {

@@ -17,7 +17,13 @@ let
 in
 {
   imports = [ inputs.homelab-monitoring.nixosModules.alloy ];
-  config = lib.mkIf cfg.enable (
+  options.homelab.postgresql.metrics.enable = lib.mkOption {
+    description = "Whether Alloy scrapes PostgreSQL's metrics, and runs its exporter sidecar.";
+    type = lib.types.bool;
+    default = config.homelab.alloy.enable;
+    defaultText = lib.literalExpression "config.homelab.alloy.enable";
+  };
+  config = lib.mkIf (cfg.enable && cfg.metrics.enable) (
     lib.mkMerge [
       {
         homelab.alloy.monitors.postgresql.podPort = port;
