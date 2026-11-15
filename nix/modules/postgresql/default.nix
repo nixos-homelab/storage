@@ -155,7 +155,13 @@ in
       default = [ ];
     };
   };
-  imports = [ inputs.setup-secrets.nixosModules.default ] ++ self.lib.importsApply [ ./metrics.nix ];
+  imports = [
+    inputs.setup-secrets.nixosModules.default
+  ]
+  ++ self.lib.importsApply [
+    ./grafana.nix
+    ./metrics.nix
+  ];
   config = lib.mkIf cfg.enable {
     homelab.cluster.images = [ image ];
     # A password is generated only when its Secret is missing, never when the API call fails

@@ -11,7 +11,10 @@ let
 in
 {
   key = "${toString __curPos.file}#modules.nixos.redis";
-  imports = self.lib.importsApply [ ./metrics.nix ];
+  imports = self.lib.importsApply [
+    ./grafana.nix
+    ./metrics.nix
+  ];
   options.homelab.redis = {
     enable = lib.mkEnableOption "Redis";
     databases = lib.mkOption {
