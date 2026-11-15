@@ -196,13 +196,20 @@ in
       _serviceName: spec: "/${spec.dbName}.pgdump"
     ) dbBackups;
 
-    # A workload named after a database waits until it can log in to it. Started before postgresql is up or before the
-    # job made the database, it crash-loops into a back-off that outlasts both
+    # A workload named after a database waits until it can log in to it and the other databases of its namespace.
+    # Started before postgresql is up or before the jobs made the databases, it crash-loops into a back-off that
+    # outlasts both
     homelab.kubernetes.submodules.defaults = [
       {
         name = "workload";
         default =
           { name, ... }:
+          let
+            spec = cfg.databases.${name};
+            dbNames = lib.mapAttrsToList (_serviceName: other: other.dbName) (
+              lib.filterAttrs (_serviceName: other: other.namespace == spec.namespace) cfg.databases
+            );
+          in
           lib.mkIf (cfg.databases ? ${name}) {
             kubernetes.resources.deployments.${name}.spec.template.spec.initContainers.wait-for-postgresql = {
               image = "${image.buildArgs.name}:${image.imageTag}";
@@ -210,13 +217,16 @@ in
               command = [
                 "bash"
                 "-c"
-                "until psql --no-psqlrc -c '' 2>/dev/null; do sleep 2; done"
+                "until ${
+                  lib.concatMapStringsSep " && " (
+                    dbName: "psql --no-psqlrc -d ${lib.escapeShellArg dbName} -c '' 2>/dev/null"
+                  ) dbNames
+                }; do sleep 2; done"
               ];
               env = {
                 PGHOST.value = "postgresql.postgresql";
                 PGCONNECT_TIMEOUT.value = "5";
-                PGUSER.value = cfg.databases.${name}.username;
-                PGDATABASE.value = cfg.databases.${name}.dbName;
+                PGUSER.value = spec.username;
                 PGPASSWORD.valueFrom.secretKeyRef = {
                   name = "postgresql-password";
                   key = "password";
