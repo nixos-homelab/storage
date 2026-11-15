@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ inputs, self, ... }:
 {
   lib,
   pkgs,
@@ -73,13 +73,6 @@ let
     # `lifecycle.stopSignal` is alpha (ContainerStopSignals) at 1.35 and the API server drops it
     config.StopSignal = "SIGINT";
   };
-  # The role the exporter logs in as: pg_monitor and nothing more
-  metricsRole = "metrics";
-  exporterImage = pkgs.dockerTools.buildImage {
-    name = "cluster.local/postgres-exporter";
-    copyToRoot = lib.optionals cfg.debug ccfg.debugTools;
-    config.Entrypoint = [ (lib.getExe pkgs.prometheus-postgres-exporter) ];
-  };
 in
 {
   key = "${toString __curPos.file}#modules.nixos.postgresql";
@@ -134,6 +127,12 @@ in
         )
       );
     };
+    startupSql = lib.mkOption {
+      description = "SQL the postStart hook runs as postgres on every start, after it sets the password of postgres";
+      type = lib.types.lines;
+      default = "";
+      internal = true;
+    };
     extraSettings = lib.mkOption {
       description = "Additional postgresql.conf settings";
       type = lib.types.lines;
@@ -156,16 +155,9 @@ in
       default = [ ];
     };
   };
-  imports = [
-    inputs.setup-secrets.nixosModules.default
-    inputs.homelab-monitoring.nixosModules.alloy
-  ];
+  imports = [ inputs.setup-secrets.nixosModules.default ] ++ self.lib.importsApply [ ./metrics.nix ];
   config = lib.mkIf cfg.enable {
-    homelab.cluster.images = [
-      image
-      exporterImage
-    ];
-    homelab.alloy.monitors.postgresql = { };
+    homelab.cluster.images = [ image ];
     # A password is generated only when its Secret is missing, never when the API call fails
     setup-secrets.sources = lib.listToAttrs (
       map (
@@ -202,13 +194,7 @@ in
         '';
       }) cfg.databases
     );
-    assertions = [
-      {
-        assertion = !(lib.elem metricsRole usernames);
-        message = "homelab.postgresql.databases has the username ${metricsRole}, the role of the metrics exporter";
-      }
-    ]
-    ++ lib.mapAttrsToList (namespace: names: {
+    assertions = lib.mapAttrsToList (namespace: names: {
       assertion = lib.length names == 1;
       message = "homelab.postgresql.databases in the namespace ${namespace} have the usernames ${lib.concatStringsSep ", " names}; they share its Secret postgresql-password, so they need one username";
     }) usernamesByNamespace;
@@ -272,10 +258,7 @@ in
             submodule = "workload";
             args = {
               dataPath = "/var/lib/postgresql";
-              ports = {
-                postgresql = 5432;
-                metrics = 9187;
-              };
+              ports.postgresql = 5432;
               container = {
                 image = "${image.buildArgs.name}:${image.imageTag}";
                 imagePullPolicy = "Never";
@@ -288,8 +271,7 @@ in
                     until psql --no-psqlrc -qh /run/postgresql -U postgres -v ON_ERROR_STOP=1 >/dev/null <<'EOF'
                     \getenv pw POSTGRES_PASSWORD
                     ALTER USER postgres PASSWORD :'pw'
-                    SELECT 'CREATE ROLE ${metricsRole} LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${metricsRole}')\gexec
-                    GRANT pg_monitor TO ${metricsRole}
+                    ${cfg.startupSql}
                     EOF
                     do sleep 1; done
                   ''
@@ -314,33 +296,10 @@ in
                 shared_buffers = 128MB
                 ${cfg.extraSettings}
               '';
-              deployments.postgresql.spec.template = {
-                metadata.annotations."kubectl.kubernetes.io/default-container" = "postgresql";
-                spec.volumes = {
-                  config.configMap.name = "postgresql";
-                  run.emptyDir = { };
-                  tmp.emptyDir = { };
-                };
-                # The port is the exporter's, which listens in the pod beside postgresql
-                spec.containers.postgresql.ports = lib.mkForce { postgresql.containerPort = 5432; };
-                # Over TCP to localhost, which pg_hba.conf from initdb trusts: no password to hold. The exporter shares
-                # the pod's network namespace, so the trust is what it had anyway; the role keeps it to pg_monitor
-                spec.containers.metrics = {
-                  image = "${exporterImage.buildArgs.name}:${exporterImage.imageTag}";
-                  imagePullPolicy = "Never";
-                  env = {
-                    DATA_SOURCE_URI.value = "localhost:5432/postgres?sslmode=disable";
-                    DATA_SOURCE_USER.value = metricsRole;
-                  };
-                  ports.metrics.containerPort = 9187;
-                  livenessProbe.httpGet.port = "metrics";
-                  readinessProbe.httpGet.port = "metrics";
-                  securityContext = {
-                    allowPrivilegeEscalation = false;
-                    readOnlyRootFilesystem = true;
-                    capabilities.drop = [ "ALL" ];
-                  };
-                };
+              deployments.postgresql.spec.template.spec.volumes = {
+                config.configMap.name = "postgresql";
+                run.emptyDir = { };
+                tmp.emptyDir = { };
               };
             };
           };
