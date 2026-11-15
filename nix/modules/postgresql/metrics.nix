@@ -32,7 +32,7 @@ in
         homelab.cluster.images = [ image ];
         homelab.postgresql.startupSql = ''
           SELECT 'CREATE ROLE ${role} LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${role}')\gexec
-          GRANT pg_monitor TO ${role}
+          GRANT pg_monitor TO ${role};
         '';
         homelab.kubernetes.submodules.instances.postgresql.config.submodules.instances.postgresql.config.kubernetes.resources = {
           services.postgresql.spec.ports.metrics.port = port;

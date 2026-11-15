@@ -128,7 +128,7 @@ in
       );
     };
     startupSql = lib.mkOption {
-      description = "SQL the postStart hook runs as postgres on every start, after it sets the password of postgres";
+      description = "SQL the postStart hook runs as postgres on every start, after it sets the password of postgres. Each statement ends in `;` (or `\\gexec`): psql runs them as one script with ON_ERROR_STOP.";
       type = lib.types.lines;
       default = "";
       internal = true;
@@ -270,7 +270,7 @@ in
                   ''
                     until psql --no-psqlrc -qh /run/postgresql -U postgres -v ON_ERROR_STOP=1 >/dev/null <<'EOF'
                     \getenv pw POSTGRES_PASSWORD
-                    ALTER USER postgres PASSWORD :'pw'
+                    ALTER USER postgres PASSWORD :'pw';
                     ${cfg.startupSql}
                     EOF
                     do sleep 1; done
