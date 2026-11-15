@@ -67,32 +67,10 @@
             '';
             checks.manifests = inputs.homelab-shared.lib.checks.manifests {
               inherit pkgs;
-              modules = lib.attrValues self.nixosModules ++ [
-                {
-                  homelab = {
-                    nfs-provisioner = {
-                      enable = true;
-                      path = "/srv/nfs";
-                    };
-                    postgresql = {
-                      enable = true;
-                      # Two databases of one consumer, the second with a hyphen in its name
-                      databases = {
-                        myapp.backup.enable = true;
-                        myapp-log = {
-                          namespace = "myapp";
-                          username = "myapp";
-                        };
-                      };
-                    };
-                    redis = {
-                      enable = true;
-                      databases = { };
-                    };
-                  };
-                }
-              ];
+              modules = lib.attrValues self.nixosModules ++ [ ./nix/tests/config.nix ];
             };
+            # nfs-provisioner and postgresql on one node on k3s' bundled network, under the NixOS test driver (needs KVM)
+            checks.storage = import ./nix/tests/storage.nix { inherit self inputs pkgs; };
             packages = {
               options-docs = inputs.docs.lib.docs.options {
                 inherit pkgs;
