@@ -19,6 +19,17 @@
       inputs.setup-secrets.follows = "setup-secrets";
       inputs.kube-generators.follows = "kube-generators";
     };
+    homelab-monitoring = {
+      url = "github:nixos-homelab/monitoring";
+      inputs.systems.follows = "systems";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts";
+      inputs.setup-secrets.follows = "setup-secrets";
+      inputs.kube-generators.follows = "kube-generators";
+      inputs.homelab-shared.follows = "homelab-shared";
+      inputs.homelab-storage.follows = "";
+      inputs.docs.follows = "docs";
+    };
     docs = {
       url = "github:andsens/nix-docs";
       inputs.systems.follows = "systems";
