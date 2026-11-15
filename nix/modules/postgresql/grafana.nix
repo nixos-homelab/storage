@@ -1,6 +1,7 @@
 # PostgreSQL's rows of the Workload dashboard, shown for its namespace. Unlike other modules' grafana.nix this one doesn't
-# import homelab-monitoring's Grafana module, which imports this flake's PostgreSQL module back (this flake's
-# homelab-monitoring has no homelab-storage): the rows are added only where Grafana's options exist
+# import homelab-monitoring's Grafana module: that module imports this flake's PostgreSQL module, so the two would
+# import each other, which makes the module system recurse while it collects the imports (as Alloy's and
+# Grafana's modules did). The rows are added only where Grafana's options are declared
 { inputs, ... }:
 {
   config,
