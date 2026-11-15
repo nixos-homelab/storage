@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ inputs, self, ... }:
 {
   lib,
   pkgs,
@@ -127,6 +127,12 @@ in
         )
       );
     };
+    startupSql = lib.mkOption {
+      description = "SQL the postStart hook runs as postgres on every start, after it sets the password of postgres. Each statement ends in `;` (or `\\gexec`): psql runs them as one script with ON_ERROR_STOP.";
+      type = lib.types.lines;
+      default = "";
+      internal = true;
+    };
     extraSettings = lib.mkOption {
       description = "Additional postgresql.conf settings";
       type = lib.types.lines;
@@ -149,7 +155,7 @@ in
       default = [ ];
     };
   };
-  imports = [ inputs.setup-secrets.nixosModules.default ];
+  imports = [ inputs.setup-secrets.nixosModules.default ] ++ self.lib.importsApply [ ./metrics.nix ];
   config = lib.mkIf cfg.enable {
     homelab.cluster.images = [ image ];
     # A password is generated only when its Secret is missing, never when the API call fails
@@ -264,7 +270,8 @@ in
                   ''
                     until psql --no-psqlrc -qh /run/postgresql -U postgres -v ON_ERROR_STOP=1 >/dev/null <<'EOF'
                     \getenv pw POSTGRES_PASSWORD
-                    ALTER USER postgres PASSWORD :'pw'
+                    ALTER USER postgres PASSWORD :'pw';
+                    ${cfg.startupSql}
                     EOF
                     do sleep 1; done
                   ''
