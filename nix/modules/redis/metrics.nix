@@ -17,7 +17,13 @@ in
   imports = [ inputs.homelab-monitoring.nixosModules.alloy ];
   config = lib.mkIf config.homelab.redis.enable (
     lib.mkMerge [
-      { homelab.alloy.monitors.redis.podPort = port; }
+      {
+        homelab.alloy.monitors.redis = {
+          podPort = port;
+          # Its instance is a workload, which can't hold the policy (kubenix nesting): a manifest of its own
+          manifest = null;
+        };
+      }
       (lib.mkIf config.homelab.alloy.enable {
         homelab.cluster.images = [ image ];
         homelab.kubernetes.submodules.instances.redis.config.kubernetes.resources = {
