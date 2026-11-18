@@ -87,6 +87,11 @@
                 }
               ];
             };
+            # The parsers of this flake's workloads on their examples, through the pinned Alloy and Loki
+            checks.logs = inputs.homelab-monitoring.lib.logs.check {
+              inherit pkgs;
+              modules = lib.attrValues self.nixosModules ++ [ ./nix/tests/config.nix ];
+            };
             # nfs-provisioner and postgresql on one node on k3s' bundled network, under the NixOS test driver (needs KVM)
             checks.storage = import ./nix/tests/storage.nix { inherit self inputs pkgs; };
             packages = {

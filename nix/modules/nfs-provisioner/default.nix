@@ -1,4 +1,4 @@
-{ inputs, ... }:
+{ inputs, self, ... }:
 {
   config,
   pkgs,
@@ -36,6 +36,7 @@ let
 in
 {
   key = "${toString __curPos.file}#modules.nixos.nfs-provisioner";
+  imports = self.lib.importsApply [ ./logs.nix ];
   options.homelab.nfs-provisioner = {
     enable = lib.mkEnableOption "the NFS volume provisioner";
     server = lib.mkOption {
