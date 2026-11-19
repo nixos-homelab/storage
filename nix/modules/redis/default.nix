@@ -12,6 +12,7 @@ in
 {
   key = "${toString __curPos.file}#modules.nixos.redis";
   imports = self.lib.importsApply [
+    ./home-area.nix
     ./grafana.nix
     ./logs.nix
     ./metrics.nix
