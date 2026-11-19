@@ -170,37 +170,38 @@ in
     setup-secrets.sources = lib.listToAttrs (
       map (
         username:
-        lib.nameValuePair (passwordSource username) {
-          description = "PostgreSQL password of ${username}";
-          cmd = hllib.setup-secrets.mkScript pkgs ''
-            if [[ -n $(kubectl -n postgresql get secret ${username}-password --ignore-not-found -oname) ]]; then
-              getKubeSecret postgresql ${username}-password password
-            else
-              head -c 1024 /dev/urandom | tr -dc A-Za-z0-9 | head -c 32
-            fi
-          '';
-        }
+        lib.nameValuePair (passwordSource username) (
+          hllib.setup-secrets.kubeSecretSource pkgs {
+            description = "PostgreSQL password of ${username}";
+            namespace = "postgresql";
+            name = "${username}-password";
+            field = "password";
+            generate = "head -c 1024 /dev/urandom | tr -dc A-Za-z0-9 | head -c 32";
+          }
+        )
       ) usernames
     );
     # The consumer reads its password from a Secret in its own namespace
     setup-secrets.destinations = [
-      {
+      (hllib.setup-secrets.kubeSecretDestination pkgs {
         logPrefix = "PostgreSQL password of postgres";
-        requires = [ (passwordSource "postgres") ];
-        cmd = hllib.setup-secrets.mkScript pkgs ''
-          setKubeSecret postgresql postgres-password password "''${${passwordSource "postgres"}:?}"
-        '';
-      }
+        namespace = "postgresql";
+        name = "postgres-password";
+        data.password = passwordSource "postgres";
+      })
     ]
     ++ lib.unique (
-      lib.mapAttrsToList (_serviceName: spec: {
-        logPrefix = "PostgreSQL password of ${spec.username}";
-        requires = [ (passwordSource spec.username) ];
-        cmd = hllib.setup-secrets.mkScript pkgs ''
-          setKubeSecret postgresql ${spec.username}-password password "''${${passwordSource spec.username}:?}"
-          setKubeSecret ${spec.namespace} postgresql-password password "''${${passwordSource spec.username}:?}"
-        '';
-      }) cfg.databases
+      lib.mapAttrsToList (
+        _serviceName: spec:
+        hllib.setup-secrets.clusterDestination pkgs {
+          logPrefix = "PostgreSQL password of ${spec.username}";
+          requires = [ (passwordSource spec.username) ];
+          script = ''
+            setKubeSecret postgresql ${spec.username}-password password "''${${passwordSource spec.username}:?}"
+            setKubeSecret ${spec.namespace} postgresql-password password "''${${passwordSource spec.username}:?}"
+          '';
+        }
+      ) cfg.databases
     );
     assertions = lib.mapAttrsToList (namespace: names: {
       assertion = lib.length names == 1;
