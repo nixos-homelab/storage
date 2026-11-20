@@ -2,6 +2,8 @@
 # import homelab-monitoring's Grafana module: that module imports this flake's PostgreSQL module, so the two would
 # import each other, which makes the module system recurse while it collects the imports (as Alloy's and
 # Grafana's modules did). The rows are added only where Grafana's options are declared
+# Its namespace counts toward the `storage` area of the Home dashboard, whose CPU, memory and traffic graphs sum the
+# containers by area
 { inputs, ... }:
 {
   config,
@@ -31,6 +33,10 @@ in
     '';
   };
   config = lib.optionalAttrs hasGrafana {
+    homelab.grafana.home.areas.storage = {
+      color = "#a0522d";
+      namespaces = lib.mkIf config.homelab.postgresql.enable [ "postgresql" ];
+    };
     homelab.grafana.drilldown.rows.postgresql = lib.mkIf cfg.grafana.enable {
       workload = "postgresql";
       row = g.row { title = "PostgreSQL"; } (
