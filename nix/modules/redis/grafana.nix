@@ -1,36 +1,33 @@
-# Redis's row of the Workload dashboard, shown for its namespace. Unlike other modules' grafana.nix this one doesn't
-# import homelab-monitoring's Grafana module: that module imports this flake's PostgreSQL module, so the two would
-# import each other, which makes the module system recurse while it collects the imports (as Alloy's and
-# Grafana's modules did). The rows are added only where Grafana's options are declared
+# Redis's row of the Workload dashboard, shown for its namespace. Its namespace counts toward the `storage` area of the
+# Home dashboard, whose CPU, memory and traffic graphs sum the containers by area
 { inputs, ... }:
 {
   config,
   lib,
-  options,
   ...
 }:
 let
   g = inputs.homelab-monitoring.lib.grafana;
   cfg = config.homelab.redis;
   j = ''namespace="redis"'';
-  hasGrafana = options ? homelab && options.homelab ? grafana;
 in
 {
+  imports = [ inputs.homelab-monitoring.nixosModules.grafana ];
   options.homelab.redis.grafana.enable = lib.mkOption {
     description = "Whether the Workload dashboard has Redis's rows.";
     type = lib.types.bool;
     default =
-      hasGrafana
-      && cfg.enable
-      && cfg.metrics.enable
-      && config.homelab.alloy.enable
-      && config.homelab.grafana.enable;
+      cfg.enable && cfg.metrics.enable && config.homelab.alloy.enable && config.homelab.grafana.enable;
     defaultText = lib.literalExpression ''
       config.homelab.redis.enable && config.homelab.redis.metrics.enable && config.homelab.alloy.enable
-      && config.homelab.grafana.enable, where homelab-monitoring's Grafana module is imported
+      && config.homelab.grafana.enable
     '';
   };
-  config = lib.optionalAttrs hasGrafana {
+  config = {
+    homelab.grafana.home.areas.storage = {
+      color = "#a0522d";
+      namespaces = lib.mkIf config.homelab.redis.enable [ "redis" ];
+    };
     homelab.grafana.drilldown.rows.redis = lib.mkIf cfg.grafana.enable {
       workload = "redis";
       row = g.row { title = "Redis"; } (

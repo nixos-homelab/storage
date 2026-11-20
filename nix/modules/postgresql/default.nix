@@ -159,7 +159,6 @@ in
     inputs.setup-secrets.nixosModules.default
   ]
   ++ self.lib.importsApply [
-    ./home-area.nix
     ./grafana.nix
     ./logs.nix
     ./metrics.nix
