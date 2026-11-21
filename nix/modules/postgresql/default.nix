@@ -195,6 +195,10 @@ in
         hllib.setup-secrets.clusterDestination pkgs {
           logPrefix = "PostgreSQL password of ${spec.username}";
           requires = [ (passwordSource spec.username) ];
+          outputs = [
+            "kube:postgresql/${spec.username}-password"
+            "kube:${spec.namespace}/postgresql-password"
+          ];
           script = ''
             setKubeSecret postgresql ${spec.username}-password password "''${${passwordSource spec.username}:?}"
             setKubeSecret ${spec.namespace} postgresql-password password "''${${passwordSource spec.username}:?}"
