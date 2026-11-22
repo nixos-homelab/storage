@@ -40,6 +40,10 @@ in
       };
       pods.postgresql = {
         format = "postgresql";
+        # A database-wide VACUUM by a database's owner, as the *Arr apps' housekeeping runs it, skips the catalogs shared by
+        # all databases with a warning for each. Autovacuum takes care of those; letting the owners vacuum them would take
+        # MAINTAIN, which also lets them lock pg_authid and with it every login
+        demote.vacuum-shared-catalog.expression = "permission denied to vacuum \"pg_[a-z_]+\", skipping it";
         examples = [
           {
             lines = [
@@ -48,6 +52,7 @@ in
               "2026-11-18 07:22:10.934 UTC [86] STATEMENT:  INSERT INTO cache_data (cache_key,data,created_at,expires) VALUES($1,$2,$3,$4)"
               "2026-11-18 07:22:12.437 UTC [29] FATAL:  the database system is starting up"
               "2026-11-18 08:05:15.130 UTC [25] LOG:  checkpoint starting: time"
+              ''2026-11-22 18:26:58.863 UTC [194570] WARNING:  permission denied to vacuum "pg_tablespace", skipping it''
             ];
             expect = [
               {
@@ -66,6 +71,11 @@ in
               {
                 message = "checkpoint starting: time";
                 level = "info";
+              }
+              {
+                message = ''permission denied to vacuum "pg_tablespace", skipping it'';
+                level = "debug";
+                fields.pid = "194570";
               }
             ];
           }
