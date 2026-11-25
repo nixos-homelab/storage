@@ -70,7 +70,12 @@
           };
         };
         perSystem =
-          { pkgs, lib, ... }:
+          {
+            config,
+            pkgs,
+            lib,
+            ...
+          }:
           {
             # One lock node per homelab repo
             checks.flake-lock = inputs.homelab-shared.lib.checks.flakeLock {
@@ -119,8 +124,16 @@
               inherit pkgs;
               modules = lib.attrValues self.nixosModules ++ [ ./nix/tests/config.nix ];
             };
-            # nfs-provisioner and postgresql on one node on k3s' bundled network, under the NixOS test driver (needs KVM)
-            checks.storage = import ./nix/tests/storage.nix { inherit self inputs pkgs; };
+            # The VM tests, under the NixOS test driver (needs KVM): `nix build .#nixosTests.<name>`. They stay out of the
+            # checks, so a plain `nix flake check` takes minutes; CI runs both
+            # nfs-provisioner and postgresql on one node on k3s' bundled network
+            legacyPackages.nixosTests.storage = import ./nix/tests/storage.nix { inherit self inputs pkgs; };
+            # That the VM tests evaluate, without building or running them
+            checks.nixos-tests = pkgs.writeText "nixos-tests" (
+              lib.concatMapStringsSep "\n" (test: builtins.unsafeDiscardOutputDependency test.drvPath) (
+                lib.attrValues config.legacyPackages.nixosTests
+              )
+            );
             packages = {
               options-docs = inputs.docs.lib.docs.options {
                 inherit pkgs;
