@@ -44,6 +44,9 @@ in
         # all databases with a warning for each. Autovacuum takes care of those; letting the owners vacuum them would take
         # MAINTAIN, which also lets them lock pg_authid and with it every login
         demote.vacuum-shared-catalog.expression = "permission denied to vacuum \"pg_[a-z_]+\", skipping it";
+        # Grafana sets a key of its database cache by INSERT, then UPDATE when the key exists (pkg/infra/remotecache/
+        # database_storage.go): every refresh of a cached key is an ERROR here, by design
+        demote.grafana-cache-upsert.expression = "(?s)duplicate key value violates unique constraint \"cache_data_pkey\".*";
         examples = [
           {
             lines = [
@@ -61,7 +64,7 @@ in
                   "DETAIL:  Key (cache_key)=(authinfo-0-authproxy-admin) already exists."
                   "STATEMENT:  INSERT INTO cache_data (cache_key,data,created_at,expires) VALUES($1,$2,$3,$4)"
                 ];
-                level = "error";
+                level = "debug";
                 fields.pid = "86";
               }
               {
