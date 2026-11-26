@@ -31,6 +31,40 @@ with subtest("storage: nfs-provisioner creates a volume with the configured mode
     got = node.succeed("stat -c '%a %u:%g' /srv/nfs/default-mode-test").strip()
     assert got == "750 900:900", got
 
+with subtest("storage: local-path creates a volume below its path for a pod that uses it, and keeps it"):
+    try:
+        node.wait_until_succeeds(
+            f"{kubectl} -n local-path rollout status deploy/local-path-provisioner --timeout=10s", timeout=600
+        )
+    except Exception:
+        node.execute(
+            f"{kubectl} -n local-path describe pods >&2; "
+            f"{kubectl} -n local-path logs deploy/local-path-provisioner --all-containers >&2"
+        )
+        raise
+    # The helper image, the one image here with a shell
+    helper = node.succeed(
+        f"{kubectl} -n local-path get cm local-path-config -o jsonpath='{{.data.helperPod\\.yaml}}'"
+        " | sed -n 's/^ *image: *//p'"
+    ).strip()
+    node.succeed(
+        f"{kubectl} apply -f - <<'EOF'\n"
+        "apiVersion: v1\nkind: PersistentVolumeClaim\n"
+        "metadata: {name: local-test, namespace: default}\n"
+        "spec: {storageClassName: local-path, accessModes: [ReadWriteOnce], resources: {requests: {storage: 1Mi}}}\n"
+        "---\napiVersion: v1\nkind: Pod\n"
+        "metadata: {name: local-test, namespace: default}\n"
+        f"spec: {{containers: [{{name: w, image: '{helper}', command: [sh, -c, 'echo ok >/data/f && sleep 3600'],"
+        " volumeMounts: [{name: d, mountPath: /data}]}], volumes: [{name: d, persistentVolumeClaim: {claimName: local-test}}]}\n"
+        "EOF"
+    )
+    node.wait_until_succeeds("test \"$(cat /var/lib/local-path/default/local-test/f)\" = ok", timeout=300)
+    pv = node.succeed(f"{kubectl} -n default get pvc local-test -o jsonpath='{{.spec.volumeName}}'").strip()
+    node.succeed(f"{kubectl} -n default delete pod local-test --wait && {kubectl} -n default delete pvc local-test --wait")
+    # Retain: the volume and its data outlive the claim
+    node.succeed(f"test \"$({kubectl} get pv {pv} -o jsonpath='{{.status.phase}}')\" = Released")
+    node.succeed("test -s /var/lib/local-path/default/local-test/f")
+
 with subtest("storage: postgresql has generated passwords from Secrets, consumers get copies, the superuser's re-set at every start"):
     node.wait_until_succeeds(f"{kubectl} get namespace postgresql", timeout=600)
     # The consumer's namespace, which its own module would make

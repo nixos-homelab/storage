@@ -63,6 +63,7 @@
             importsApply = map (path: importApply path { inherit self inputs; });
           };
           nixosModules = {
+            local-path = importApply ./nix/modules/local-path { inherit self inputs; };
             nfs-provisioner = importApply ./nix/modules/nfs-provisioner { inherit self inputs; };
             postgresql = importApply ./nix/modules/postgresql { inherit self inputs; };
             redis = importApply ./nix/modules/redis { inherit self inputs; };
@@ -141,6 +142,7 @@
                 repoPath = toString self;
                 repoLinkPrefix = "https://github.com/nixos-homelab/storage/blob/main";
                 prefixGroups = {
+                  local-path = [ "homelab.local-path" ];
                   nfs-provisioner = [ "homelab.nfs-provisioner" ];
                   postgresql = [ "homelab.postgresql" ];
                   redis = [ "homelab.redis" ];

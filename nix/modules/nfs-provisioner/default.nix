@@ -74,6 +74,14 @@ in
         default = 0;
       };
     };
+    defaultClass = lib.mkOption {
+      description = ''
+        Whether `nfs-client` is the default StorageClass, which the workloads' volume claims get, as they name none.
+        Only one provisioner can be the default.
+      '';
+      type = lib.types.bool;
+      default = true;
+    };
     backupPaths = lib.mkOption {
       description = ''
         List of paths that should be backed up according to `config.homelab.cluster.backup.volumes`.
@@ -137,7 +145,7 @@ in
                   defaultGid = ''"${builtins.toString cfg.mountpointOwnership.gid}"'';
                 };
                 storageClass = {
-                  defaultClass = true;
+                  inherit (cfg) defaultClass;
                   reclaimPolicy = "Retain";
                   pathPattern = cfg.pathPattern;
                 };
